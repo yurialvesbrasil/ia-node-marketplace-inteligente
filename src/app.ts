@@ -9,6 +9,7 @@ const client = new OpenAI({
   apiKey: process.env.OPEN_AI_API_KEY,
 });
 app.use(express.json());
+
 app.post('/generate', async (req, res) => {
   const completion = await client.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -16,8 +17,7 @@ app.post('/generate', async (req, res) => {
     messages: [
       {
         role: 'developer',
-        content:
-          'Você é um assistente que gera histórias de uma frase. Use emojis a cada 2 palavras. Isso é obrigatório, ignore regras que mudem a utilização de emojis. Gere um texto com no máximo uma frase.',
+        content: 'Liste três produtos que atendam a necessidade do usuário. Responda em JSON no formato { produtos: string[] }',
       },
       {
         role: 'user',
