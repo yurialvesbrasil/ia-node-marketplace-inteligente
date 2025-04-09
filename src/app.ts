@@ -3,6 +3,7 @@ dotenv.config();
 
 import express from 'express';
 import OpenAI from 'openai';
+import { z } from "zod";
 
 const app = express();
 const client = new OpenAI({
@@ -14,6 +15,8 @@ app.post('/generate', async (req, res) => {
   const completion = await client.chat.completions.create({
     model: 'gpt-4o-mini',
     max_completion_tokens: 100,
+    // JSON_MODE
+    response_format: { type: 'json_object' },
     messages: [
       {
         role: 'developer',
@@ -26,7 +29,18 @@ app.post('/generate', async (req, res) => {
     ],
   });
 
-  res.json({ message: completion.choices[0].message.content });
+  const output = JSON.parse(completion.choices[0].message.content ?? '');
+  const schema = z.object({
+    produtos: z.array(z.string()),
+  });
+
+  const result = schema.safeParse(output);
+  if (!result.success) {
+    res.status(500).end();
+    return;
+  }
+
+  res.json(output);
 });
 
 export default app;
