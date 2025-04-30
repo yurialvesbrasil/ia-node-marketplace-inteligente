@@ -1,5 +1,5 @@
 import express from 'express';
-import { embedProducts, generateEmbedding, generateProducts } from "./openai";
+import { embedProducts, generateCart, generateEmbedding, generateProducts } from "./openai";
 import { produtosSimilares, todosProdutos } from "./database";
 
 const app = express();
@@ -37,5 +37,13 @@ app.post('/embedding', async (req, res) => {
   await generateEmbedding(input);
   res.status(201).end();
 });
+
+app.post('/response', async (req, res) => {
+  const { input } = req.body;
+
+  const cart = await generateCart(input, ['feijão', 'detergente']);
+
+  res.json(cart);
+})
 
 export default app;
