@@ -109,6 +109,7 @@ export const generateEmbedding = async (input: string) => {
 
     return response.data[0].embedding ?? null;
   } catch (error) {
+    console.error(error);
     return null;
   }
 }
