@@ -6,6 +6,7 @@ import { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources
 import { z } from 'zod';
 import { produtosEmEstoque, produtosEmFalta, setarEmbedding, todosProdutos } from "./database";
 import { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses.mjs";
+import { ReadStream } from 'node:fs'
 
 const schema = z.object({
   produtos: z.array(z.string()),
@@ -140,8 +141,32 @@ export const generateCart = async (input: string, products: string[]) => {
     model: 'gpt-4o-mini',
     instructions: `Retorne uma lista de até 5 produtos que satisfação a necessidade do usuário. Os produtos disponíveis são os seguintes: ${JSON.stringify(products)}`,
     input,
+    tools: [
+      {
+        type: 'file_search',
+        vector_store_ids: ['vs_6813d154e3c88191ab8aacfc66052e7e'],
+      }
+    ],
     text: {
       format: zodTextFormat(schema, 'carrinho'),
     }
   })
+}
+
+export const uploadFile = async (file: ReadStream) => {
+  const uploaded = await client.files.create({
+    file,
+    purpose: 'assistants',
+  });
+
+  console.dir(uploaded, { depth: null });
+}
+
+export const createVector = async () => {
+  const vectorStore = await client.vectorStores.create({
+    name: 'node_ia_file_search_class',
+    file_ids: ['file-2GMRzcyTDZp1HjxEx5pfd1']
+  })
+
+  console.dir(vectorStore, { depth: null });
 }

@@ -1,6 +1,8 @@
 import express from 'express';
-import { embedProducts, generateCart, generateEmbedding, generateProducts } from "./openai";
+import { createVector, embedProducts, generateCart, generateEmbedding, generateProducts, uploadFile } from "./openai";
 import { produtosSimilares, todosProdutos } from "./database";
+import { createReadStream } from "node:fs";
+import path from "node:path";
 
 const app = express();
 app.use(express.json());
@@ -41,9 +43,32 @@ app.post('/embedding', async (req, res) => {
 app.post('/response', async (req, res) => {
   const { input } = req.body;
 
-  const cart = await generateCart(input, ['feijão', 'detergente']);
+  const cart = await generateCart(input, todosProdutos().map(p => p.nome));
 
   res.json(cart);
 })
+
+app.post('/upload', async (req, res) => {
+  const file = createReadStream(path.join(__dirname, '..', 'static', 'recipes.md'));
+  uploadFile(file)
+  res.status(201).end();
+})
+
+app.post('/vector-store', async (req, res) => {
+  await createVector();
+  res.status(201).end();
+})
+
+// {
+//   object: 'file',
+//   id: 'file-2GMRzcyTDZp1HjxEx5pfd1',
+//   purpose: 'assistants',
+//   filename: 'recipes.md',
+//   bytes: 2546,
+//   created_at: 1746129038,
+//   expires_at: null,
+//   status: 'processed',
+//   status_details: null
+// }
 
 export default app;
