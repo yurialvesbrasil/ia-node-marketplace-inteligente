@@ -1,5 +1,5 @@
 import express from 'express';
-import { createEmbeddingsBatch, createEmbeddingsBatchFile, createVector, embedProducts, generateCart, generateEmbedding, generateProducts, uploadFile } from "./openai";
+import { createEmbeddingsBatch, createEmbeddingsBatchFile, createVector, embedProducts, generateCart, generateEmbedding, generateProducts, getBatch, getFileContent, uploadFile } from "./openai";
 import { produtosSimilares, todosProdutos } from "./database";
 import { createReadStream } from "node:fs";
 import path from "node:path";
@@ -62,6 +62,22 @@ app.post('/vector-store', async (req, res) => {
 app.post('/embeddings-batch', async (req, res) => {
   const file = await createEmbeddingsBatchFile(['sorvete', 'alface']);
   const batch = await createEmbeddingsBatch(file.id);
+  res.json(batch);
+})
+
+app.post('/embeddings-batch/result', async (req, res) => {
+  const batch = await getBatch('batch_681cef110b348190ac52d60760584d26');
+
+  if (batch.status !== 'completed' || !batch.output_file_id) {
+    res.json(batch);
+    return;
+  }
+
+  console.log('TODO: process results', batch.output_file_id);
+
+  const file = await getFileContent(batch.output_file_id);
+  console.log(file);
+
   res.json(batch);
 })
 

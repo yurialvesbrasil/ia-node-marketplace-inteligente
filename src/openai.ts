@@ -176,7 +176,7 @@ export const createVector = async () => {
 export const createEmbeddingsBatchFile = async (products: string[]) => {
   const content = products
     .map((p, i) => ({
-      custom_id: i,
+      custom_id: String(i),
       method: 'POST',
       url: '/v1/embeddings',
       body: {
@@ -205,4 +205,14 @@ export const createEmbeddingsBatch = async (fileId: string) => {
   });
 
   return batch
+}
+
+export const getBatch = async (id: string) => {
+  return await client.batches.retrieve(id);
+}
+
+export const getFileContent = async (id: string) => {
+  const response = await client.files.content(id);
+
+  return response.text();
 }
