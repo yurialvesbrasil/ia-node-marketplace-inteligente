@@ -60,13 +60,13 @@ app.post('/vector-store', async (req, res) => {
 })
 
 app.post('/embeddings-batch', async (req, res) => {
-  const file = await createEmbeddingsBatchFile(['sorvete', 'alface']);
+  const file = await createEmbeddingsBatchFile(todosProdutos().map(p => `${p.nome}: ${p.descricao}`));
   const batch = await createEmbeddingsBatch(file.id);
   res.json(batch);
 })
 
-app.post('/embeddings-batch/result', async (req, res) => {
-  const result = await processEmbeddingsBatchResult('batch_681cef110b348190ac52d60760584d26');
+app.post('/embeddings-batch/result/:id', async (req, res) => {
+  const result = await processEmbeddingsBatchResult(req.params.id);
   if (!result){
     res.status(200).json({ message: 'Still processing' });
     return
