@@ -7,6 +7,12 @@ type Cart = {
   created_at: Date;
   store_id: number;
   active: boolean;
+  items: {
+    id: number;
+    name: string;
+    price: number;
+    quantity: number;
+  }[];
 };
 
 @Injectable()
@@ -82,6 +88,10 @@ export class CartService {
     const result = await this.postgresService.client.query<Cart>(
       `SELECT
         carts.id AS id,
+        carts.user_id AS user_id,
+        carts.created_at AS created_at,
+        carts.store_id AS store_id,
+        carts.active AS active,
         json_agg(
           json_build_object(
             'id', products.id,
@@ -101,5 +111,30 @@ export class CartService {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  async updateCartItemQuantity(
+    userId: number,
+    productId: number,
+    quantity: number,
+  ) {
+    const cart = await this.getCart(userId);
+
+    if (!cart) {
+      throw new NotFoundException('Cart not found 1');
+    }
+
+    if (cart.user_id !== userId) {
+      throw new NotFoundException('Cart not found 2');
+    }
+
+    if (cart.items.every((item) => item.id !== productId)) {
+      throw new NotFoundException('Product not found in cart');
+    }
+
+    await this.postgresService.client.query(
+      `UPDATE cart_items SET quantity = $1 WHERE cart_id = $2 AND product_id = $3`,
+      [quantity, cart.id, productId],
+    );
   }
 }
