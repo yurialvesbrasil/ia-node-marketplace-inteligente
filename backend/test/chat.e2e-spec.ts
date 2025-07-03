@@ -98,5 +98,22 @@ describe('Chat (e2e)', () => {
     );
     expect(getResponse.body.messages[1]).toHaveProperty('sender', 'assistant');
     expect(getResponse.body.messages[1]).toHaveProperty('action');
-  });
+
+    const postConfirmResponse = await request(app.getHttpServer()).post(
+      `/chat/${sessionId}/actions/${getResponse.body.messages[1].action.id}/confirm`,
+    );
+    console.log(postConfirmResponse.body);
+    expect(postConfirmResponse.status).toBe(201);
+
+    const getAfterConfirmResponse = await request(app.getHttpServer()).get(
+      `/chat/${sessionId}`,
+    );
+    expect(getAfterConfirmResponse.status).toBe(200);
+    expect(getAfterConfirmResponse.body.messages).toHaveLength(3);
+    expect(getAfterConfirmResponse.body.messages[2]).toHaveProperty(
+      'sender',
+      'assistant',
+    );
+    console.log(getAfterConfirmResponse.body.messages[2]);
+  }, 30000);
 });
