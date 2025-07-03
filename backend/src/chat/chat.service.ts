@@ -1,9 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { BadGatewayException, Injectable } from '@nestjs/common';
 import { PostgresService } from '../shared/postgres.service';
+import { LlmService } from '../shared/llm.service';
 
 @Injectable()
 export class ChatService {
-  constructor(private readonly postgresService: PostgresService) {}
+  constructor(
+    private readonly postgresService: PostgresService,
+    private readonly llmService: LlmService,
+  ) {}
 
   async createChatSession(userId: number) {
     const result = await this.postgresService.client.query<{
@@ -47,7 +51,27 @@ export class ChatService {
   }
 
   async addUserMessage(sessionId: number, content: string) {
-    return this.addMessageToSession(sessionId, content, 'user');
+    const userMessage = await this.addMessageToSession(
+      sessionId,
+      content,
+      'user',
+    );
+
+    const llmResponse = await this.llmService.answerMessage(content);
+
+    if (!llmResponse) {
+      throw new BadGatewayException('Failed to get a response from LLM');
+    }
+
+    await this.addMessageToSession(
+      sessionId,
+      llmResponse.message,
+      'assistant',
+      llmResponse.responseId,
+      'text',
+    );
+
+    return userMessage;
   }
 
   private async addMessageToSession(
