@@ -54,6 +54,7 @@ export class ChatService {
       id: number;
       created_at: Date;
       user_id: number;
+      messages: ChatMessage[] | null;
     }>(
       `
       SELECT chat_sessions.id, chat_sessions.created_at, chat_sessions.user_id, JSON_AGG(
@@ -91,7 +92,61 @@ export class ChatService {
       return null;
     }
 
-    return result.rows[0];
+    const populatedMessages = await this.populateMessages(
+      result.rows[0].messages ?? [],
+    );
+
+    return {
+      ...result.rows[0],
+      messages:
+        populatedMessages.sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        ) ?? [],
+    };
+  }
+
+  private populateMessages(messages: ChatMessage[]) {
+    return Promise.all(
+      messages.map(async (message) => {
+        if (message.message_type !== 'suggest_carts_result') {
+          return message;
+        }
+
+        const cartsResult = await this.postgresService.client.query<{
+          store_id: number;
+          store_name: string;
+          score: number;
+        }>(
+          `
+          SELECT c.id, c.store_id, s.name AS store_name, c.score, jSON_AGG(
+            JSON_BUILD_OBJECT(
+              'id', p.id,
+              'name', p.name,
+              'price', p.price,
+              'quantity', ci.quantity
+            )
+          ) AS products
+          FROM carts c
+          JOIN stores s ON c.store_id = s.id
+          JOIN cart_items ci ON c.id = ci.cart_id
+          JOIN products p ON ci.product_id = p.id
+          WHERE c.suggested_by_message_id = $1
+          GROUP BY c.store_id, s.name, c.score, c.id
+        `,
+          [message.id],
+        );
+
+        return {
+          ...message,
+          carts: cartsResult.rows.map((row) => ({
+            store_id: row.store_id,
+            store_name: row.store_name,
+            score: row.score,
+          })),
+        };
+      }),
+    );
   }
 
   async addUserMessage(sessionId: number, content: string) {
@@ -172,7 +227,7 @@ export class ChatService {
     );
 
     if (session.rows.length === 0) {
-      return null;
+      throw new NotFoundException('Chat session not found');
     }
 
     const result = await this.postgresService.client.query<ChatMessageAction>(
@@ -180,7 +235,7 @@ export class ChatService {
       [actionId],
     );
     if (result.rows.length === 0) {
-      return null;
+      throw new NotFoundException('Chat message action not found');
     }
 
     if (result.rows[0].confirmed_at) {
@@ -226,11 +281,73 @@ export class ChatService {
           [JSON.stringify(embeddings.embedding)],
         );
 
-      console.dir(relevantProductsGroupedByStore.rows, { depth: null });
+      if (relevantProductsGroupedByStore.rows.length === 0) {
+        throw new NotFoundException(
+          'No relevant products found for the given input.',
+        );
+      }
+
+      const llmResponse = await this.llmService.suggestCarts(
+        relevantProductsGroupedByStore.rows,
+        result.rows[0].payload.input,
+      );
+
+      if (!llmResponse || !llmResponse.carts) {
+        throw new BadGatewayException(
+          'Failed to get cart suggestions from the LLM',
+        );
+      }
+
+      await this.postgresService.client.query(
+        `UPDATE chat_messages_actions SET executed_at = NOW() WHERE id = $1`,
+        [actionId],
+      );
+
+      const message = await this.addMessageToSession(
+        sessionId,
+        llmResponse.response,
+        'assistant',
+        llmResponse.responseId,
+        'suggest_carts_result',
+      );
+
+      await this.saveSuggestedCarts(message.id, llmResponse.carts);
     } else {
       throw new InternalServerErrorException(
         `Action type ${result.rows[0].action_type} is not supported.`,
       );
+    }
+  }
+
+  private async saveSuggestedCarts(
+    messageId: number,
+    carts: {
+      store_id: number;
+      score: number;
+      products: {
+        id: number;
+      }[];
+    }[],
+  ) {
+    for (const cart of carts) {
+      const cartResult = await this.postgresService.client.query<{
+        id: number;
+      }>(
+        `INSERT INTO carts (user_id, store_id, score, suggested_by_message_id, active)
+         VALUES ($1, $2, $3, $4, FALSE)
+         RETURNING id`,
+        [1, cart.store_id, cart.score, messageId],
+      );
+
+      const cartId = cartResult.rows[0].id;
+
+      for (const product of cart.products) {
+        await this.postgresService.client.query(
+          `INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, 1)
+           ON CONFLICT (cart_id, product_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
+          [cartId, product.id],
+        );
+      }
     }
   }
 }
