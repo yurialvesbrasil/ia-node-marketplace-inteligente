@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS chat_sessions CASCADE;
 DROP TABLE IF EXISTS chat_messages CASCADE;
+DROP TABLE IF EXISTS chat_messages_actions CASCADE;
 
 CREATE TABLE stores (
     id SERIAL PRIMARY KEY,
@@ -43,6 +44,17 @@ CREATE TABLE chat_messages (
     openai_message_id VARCHAR(100) UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     message_type VARCHAR(50) NOT NULL CHECK (message_type in ('text', 'suggest_carts_result')) DEFAULT 'text'
+);
+
+CREATE TABLE chat_messages_actions (
+    id SERIAL PRIMARY KEY,
+    chat_message_id INTEGER REFERENCES chat_messages(id),
+    action_type VARCHAR(50) NOT NULL CHECK (action_type IN ('suggest_carts')),
+    payload JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at TIMESTAMP DEFAULT NULL,
+    executed_at TIMESTAMP DEFAULT NULL,
+    CONSTRAINT unique_chat_message_action UNIQUE (chat_message_id, action_type)
 );
 
 CREATE TABLE carts (
