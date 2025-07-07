@@ -350,4 +350,24 @@ export class ChatService {
       }
     }
   }
+
+  async chooseCart(cartId: number, userId: number) {
+    const cart = await this.postgresService.client.query<{
+      id: number;
+    }>(`SELECT id FROM carts WHERE id = $1`, [cartId]);
+
+    if (cart.rows.length === 0) {
+      throw new NotFoundException('Cart not found');
+    }
+
+    await this.postgresService.client.query(
+      `UPDATE carts SET active = FALSE WHERE user_id = $1 AND active = TRUE`,
+      [userId],
+    );
+
+    await this.postgresService.client.query(
+      `UPDATE carts SET active = TRUE WHERE id = $1`,
+      [cartId],
+    );
+  }
 }

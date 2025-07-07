@@ -49,4 +49,9 @@ export class ChatController {
   ) {
     await this.chatService.confirmAction(sessionId, actionId);
   }
+
+  @Post(':cartId/choose')
+  async chooseCart(@Param('cartId') cartId: number) {
+    await this.chatService.chooseCart(cartId, this.userId);
+  }
 }
