@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import z from 'zod';
 import { answerMessageSchema, suggestCartsSchema } from './schemas';
 
-type AnswerMessage = z.infer<typeof answerMessageSchema>;
-type SuggestCarts = z.infer<typeof suggestCartsSchema>;
+export type AnswerMessage = z.infer<typeof answerMessageSchema>;
+export type SuggestCarts = z.infer<typeof suggestCartsSchema>;
 
 @Injectable()
 export abstract class LlmService {
@@ -39,5 +39,6 @@ export abstract class LlmService {
   abstract answerMessage(
     message: string,
     previousMessageId: string | null,
+    previousMessages: { content: string; role: string }[],
   ): Promise<(AnswerMessage & { responseId: string }) | null>;
 }
