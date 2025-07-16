@@ -4,43 +4,13 @@ import OpenAI from 'openai';
 import z from 'zod';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { CreateEmbeddingResponse } from 'openai/resources/embeddings';
-
-const answerMessageSchema = z.object({
-  message: z.string(),
-  action: z.discriminatedUnion('type', [
-    z.object({
-      type: z.literal('send_message'),
-    }),
-    z.object({
-      type: z.literal('suggest_carts'),
-      payload: z.object({
-        input: z.string(),
-      }),
-    }),
-  ]),
-});
-
-const suggestCartsSchema = z.object({
-  carts: z.array(
-    z.object({
-      store_id: z.number(),
-      score: z.number(),
-      products: z.array(
-        z.object({
-          id: z.number(),
-          quantity: z.number(),
-          name: z.string(),
-        }),
-      ),
-    }),
-  ),
-  response: z.string(),
-});
+import { answerMessageSchema, suggestCartsSchema } from './schemas';
+import { LlmService } from './llm.service';
 
 type AnswerMessage = z.infer<typeof answerMessageSchema>;
 
 @Injectable()
-export class LlmService {
+export class OpenAiLlmService extends LlmService {
   static readonly ANSWER_MESSAGE_PROMPT = `Você é um assistente de um marketplace com conhecimentos gastronômicos. Identifique qual ação o usuário está solicitando:
         - 'send_message': Use essa ação para responder o usuário antes de commitar alguma ação. Caso o usuário tenha solicitado uma ação, mas você ainda precise de mais informações, use essa ação para perguntar ao usuário. Informe em "message" a resposta do assistente.
         - 'suggest_carts': Use essa ação apenas quando já tiver todas as informações necessárias para sugerir um carrinho de compras. Informe em "input" uma descrição do que o usuário está solicitando, junto a uma lista de produtos que você sugeriria para o carrinho. A mensagem que acompanha essa ação deve ser uma confirmação para o usuário, perguntando se ele confirma a ação de montar o carrinho de compras.
@@ -117,6 +87,7 @@ export class LlmService {
   private client: OpenAI;
 
   constructor(private readonly configService: ConfigService) {
+    super();
     this.client = new OpenAI({
       apiKey: this.configService.get<string>('OPEN_AI_API_KEY'),
       webhookSecret: this.configService.get<string>('OPEN_AI_WEBHOOK_SECRET'),
@@ -138,7 +109,7 @@ export class LlmService {
     try {
       const response = await this.client.responses.parse({
         model: 'gpt-4.1-nano',
-        instructions: LlmService.SUGGEST_CARTS_PROMPT,
+        instructions: OpenAiLlmService.SUGGEST_CARTS_PROMPT,
         input: `Input do usuário: ${input}\n\nProdutos disponíveis por loja:\n${JSON.stringify(
           relevantProductsByStore,
           null,
@@ -188,7 +159,7 @@ export class LlmService {
 
     if (!uploadedFile.id) {
       console.error('Failed to upload file for batch embedding');
-      return null;
+      return;
     }
 
     await this.client.batches.create({
@@ -204,14 +175,14 @@ export class LlmService {
 
     if (event.type !== 'batch.completed') {
       console.warn('Received non-batch event:', event.type);
-      return;
+      return null;
     }
 
     console.log('Batch completed event received:', event.data.id);
     const batch = await this.client.batches.retrieve(event.data.id);
     if (!batch || !batch.output_file_id) {
       console.error('Batch output file not found:', event.data.id);
-      return;
+      return null;
     }
 
     console.log('Batch output file ID:', batch.output_file_id);
@@ -275,7 +246,7 @@ export class LlmService {
       const response = await this.client.responses.parse({
         previous_response_id: previousMessageId,
         model: 'gpt-4.1-nano',
-        instructions: LlmService.ANSWER_MESSAGE_PROMPT,
+        instructions: OpenAiLlmService.ANSWER_MESSAGE_PROMPT,
         input: message,
         text: {
           format: zodTextFormat(answerMessageSchema, 'answerSchema'),
